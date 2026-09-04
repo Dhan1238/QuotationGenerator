@@ -48,3 +48,39 @@ export async function generateQuotationPdf(quotation: Quotation, templateUrl: st
   }
   return renderer(quotation);
 }
+
+/** Turns free text into a safe filename fragment: letters/digits only,
+ * everything else collapsed to a single underscore, trimmed, and length-
+ * capped so one long field can't produce an unusably long filename. */
+function sanitizeForFileNamePart(text: string): string {
+  return text
+    .trim()
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 60);
+}
+
+/**
+ * Builds a distinguishable download filename from the quotation itself —
+ * no Template lookup needed, since everything comes from fields already on
+ * the Quotation: prefix (e.g. "INF"), client name, the client's branch/
+ * first address line if any, the quote's own trailing segment (a reserved
+ * sequence number for sequential templates, or the fixed suffix like "QTN"
+ * for DPS/INF — either way it's just the last "/"-separated piece of
+ * quoteNumber), and the date. E.g.:
+ *   INF_KARNATAKA_BANK_LTD_ANANDAPURA_BRANCH_QTN_2026-09-04.pdf
+ * Used both when generating a fresh quotation and when re-downloading one
+ * from History, so both places produce the exact same naming.
+ */
+export function buildQuotationFileName(quotation: Quotation): string {
+  const suffix = quotation.quoteNumber.split('/').pop() || '';
+  const branch = (quotation.clientAddress.split('\n')[0] || '').trim();
+  const parts = [
+    quotation.prefix,
+    sanitizeForFileNamePart(quotation.clientName),
+    sanitizeForFileNamePart(branch),
+    suffix,
+    quotation.date,
+  ].filter(Boolean);
+  return `${parts.join('_').toUpperCase()}.pdf`;
+}

@@ -18,8 +18,8 @@ import type { PDFImage } from 'pdf-lib';
 import type { Quotation } from './types';
 import { PdfContext, fetchAssetBytes, formatAmount, formatDate, wrapText } from './pdfKit';
 
-export const DPS_TEMPLATE_PATH = '/dps.pdf';
-const SIGNATURE_IMAGE_PATH = '/dps-signature.png';
+export const DPS_TEMPLATE_PATH = `${import.meta.env.BASE_URL}dps.pdf`;
+const SIGNATURE_IMAGE_PATH = `${import.meta.env.BASE_URL}dps-signature.png`;
 
 const COMPANY_GSTIN = '29AAHFD9804G1Z8';
 const INTRO_PARAGRAPH = 'With reference to the above subject matter, now we are quoted the price as per below:';

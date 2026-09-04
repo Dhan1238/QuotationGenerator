@@ -30,7 +30,7 @@ import {
   saveQuotation,
   type RememberedClient,
 } from './firebaseService';
-import { downloadPdfBytes, generateQuotationPdf } from './pdfGenerator';
+import { buildQuotationFileName, downloadPdfBytes, generateQuotationPdf } from './pdfGenerator';
 import TemplateDropdown from './TemplateDropdown';
 import QuotationHistory from './QuotationHistory';
 
@@ -39,19 +39,6 @@ const THEME_STORAGE_KEY = 'quotation-app-theme';
 
 function createEmptyLineItem(): LineItem {
   return { id: crypto.randomUUID(), description: '', rate: 0, quantity: 1, unit: '', total: 0 };
-}
-
-/** Turns free text into a safe filename fragment — used to build a unique
- * download name. Needed because DPS/INF's quote number is now fixed
- * ("DPS/26-27/QTN" for every quote this fiscal year), so the quote number
- * alone would give every DPS/INF download on this machine the exact same
- * filename otherwise — silently overwriting the previous one. */
-function sanitizeForFilename(text: string): string {
-  return text
-    .trim()
-    .replace(/[^a-zA-Z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60);
 }
 
 function readInitialTheme(): ThemeMode {
@@ -102,6 +89,9 @@ export default function QuotationForm() {
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [templatesLoading, setTemplatesLoading] = useState(true);
   const [templatesError, setTemplatesError] = useState<string | null>(null);
+
+  const [termsText, setTermsText] = useState('');
+  const [termsColor, setTermsColor] = useState('#1a1a1a');
 
   const applyFetchedTemplates = (fetched: Template[]) => {
     setTemplates(fetched);
@@ -171,8 +161,6 @@ export default function QuotationForm() {
   // that explicit action (not a generic effect on selectedTemplate) so it
   // doesn't also fire, and clobber restored values, when History's "Load
   // into Form" sets the template programmatically.
-  const [termsText, setTermsText] = useState('');
-  const [termsColor, setTermsColor] = useState('#1a1a1a');
 
   const handleTemplateSelect = (templateId: string) => {
     setSelectedTemplateId(templateId);
@@ -436,12 +424,7 @@ export default function QuotationForm() {
         saveClientGstin(quotation.clientName, quotation.clientGstin);
       }
       const pdfBytes = await generateQuotationPdf(quotation, selectedTemplate.downloadUrl);
-      const fileNameParts = [
-        quoteNumber.replace(/\//g, '-'),
-        sanitizeForFilename(quotation.clientName),
-        quotation.date,
-      ].filter(Boolean);
-      downloadPdfBytes(pdfBytes, `${fileNameParts.join('-')}.pdf`);
+      downloadPdfBytes(pdfBytes, buildQuotationFileName(quotation));
 
       setSuccessMessage(`Quotation ${quoteNumber} was generated and downloaded.`);
     } catch (error) {
