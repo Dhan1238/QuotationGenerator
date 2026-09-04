@@ -75,13 +75,11 @@ export class QuotationServiceError extends Error {
 }
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAgRaI_N4ugPLt2GC1lt7I5JBid4lZCKh4",
-  authDomain: "quote-generator-app-bcfbf.firebaseapp.com",
-  projectId: "quote-generator-app-bcfbf",
-  storageBucket: "quote-generator-app-bcfbf.firebasestorage.app",
-  messagingSenderId: "362478517363",
-  appId: "1:362478517363:web:a56d9ad064cf067449be06",
-  measurementId: "G-1KNGF6Z6N0"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID as string,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID as string,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID as string,
 };
 
 
