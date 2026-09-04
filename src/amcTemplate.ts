@@ -23,10 +23,10 @@ import type { PDFImage } from 'pdf-lib';
 import type { Quotation } from './types';
 import { PdfContext, fetchAssetBytes, formatAmount, formatDate, hexToRgb, wrapText } from './pdfKit';
 
-export const SPE_AMC_TEMPLATE_PATH = '/spe_amc.pdf';
-export const SESHADRIPURAM_TEMPLATE_PATH = '/seshadripuram.pdf';
-const SIGNATURE_IMAGE_PATH = '/signature.png';
-const STAMP_IMAGE_PATH = '/stamp.png';
+export const SPE_AMC_TEMPLATE_PATH = `${import.meta.env.BASE_URL}spe_amc.pdf`;
+export const SESHADRIPURAM_TEMPLATE_PATH = `${import.meta.env.BASE_URL}seshadripuram.pdf`;
+const SIGNATURE_IMAGE_PATH = `${import.meta.env.BASE_URL}signature.png`;
+const STAMP_IMAGE_PATH = `${import.meta.env.BASE_URL}stamp.png`;
 
 const COMPANY_GSTIN = '29CPBPS6491F1ZE';
 const COMPANY_PAN = 'CPBPS6491F';

@@ -19,9 +19,9 @@ import type { PDFImage } from 'pdf-lib';
 import type { Quotation } from './types';
 import { PdfContext, fetchAssetBytes, formatAmount, formatDate, wrapText } from './pdfKit';
 
-export const INF_TEMPLATE_PATH = '/inf.pdf';
-const SIGNATURE_IMAGE_PATH = '/inf-signature.png';
-const WORKING_SITE_IMAGE_PATH = '/inf-working-site.png';
+export const INF_TEMPLATE_PATH = `${import.meta.env.BASE_URL}inf.pdf`;
+const SIGNATURE_IMAGE_PATH = `${import.meta.env.BASE_URL}inf-signature.png`;
+const WORKING_SITE_IMAGE_PATH = `${import.meta.env.BASE_URL}inf-working-site.png`;
 
 const COMPANY_GSTIN = '29BDWPS9494N1ZT';
 const COMPANY_PAN = 'BDWPS9494N';

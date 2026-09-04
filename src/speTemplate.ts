@@ -17,9 +17,9 @@ import type { PDFImage } from 'pdf-lib';
 import type { LineItem, Quotation } from './types';
 import { PdfContext, fetchAssetBytes, formatAmount, formatDate, formatNumber, hexToRgb, wrapText, type Rect } from './pdfKit';
 
-export const SPE_TEMPLATE_PATH = '/spe_kbl.pdf';
-const SIGNATURE_IMAGE_PATH = '/signature.png';
-const STAMP_IMAGE_PATH = '/stamp.png';
+export const SPE_TEMPLATE_PATH = `${import.meta.env.BASE_URL}spe_kbl.pdf`;
+const SIGNATURE_IMAGE_PATH = `${import.meta.env.BASE_URL}signature.png`;
+const STAMP_IMAGE_PATH = `${import.meta.env.BASE_URL}stamp.png`;
 
 const COMPANY_GSTIN = '29CPBPS6491F1ZE';
 export const SPE_DEFAULT_TERMS = ['Taxes: Included', 'Time required: 1 Week after confirmation'];
