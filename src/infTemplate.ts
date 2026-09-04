@@ -19,9 +19,9 @@ import type { PDFImage } from 'pdf-lib';
 import type { Quotation } from './types';
 import { PdfContext, fetchAssetBytes, formatAmount, formatDate, wrapText } from './pdfKit';
 
-export const INF_TEMPLATE_PATH = `${import.meta.env.BASE_URL}inf.pdf`;
-const SIGNATURE_IMAGE_PATH = `${import.meta.env.BASE_URL}inf-signature.png`;
-const WORKING_SITE_IMAGE_PATH = `${import.meta.env.BASE_URL}inf-working-site.png`;
+export const INF_TEMPLATE_PATH = '/inf.pdf';
+const SIGNATURE_IMAGE_PATH = '/inf-signature.png';
+const WORKING_SITE_IMAGE_PATH = '/inf-working-site.png';
 
 const COMPANY_GSTIN = '29BDWPS9494N1ZT';
 const COMPANY_PAN = 'BDWPS9494N';
@@ -71,13 +71,18 @@ export async function renderInfQuotationPdf(quotation: Quotation): Promise<Uint8
     });
   };
 
-  const drawItemRow = (slNo: string, description: string, qtyText: string, rate: number, amount: number, y: number) => {
-    ctx.writeCentered(slNo, (TABLE_COLS[0] + TABLE_COLS[1]) / 2, y - 15, TABLE_TEXT_SIZE);
+  const drawItemRow = (slNo: string, description: string, qtyText: string, rate: number, amount: number, y: number): number => {
     const descLines = wrapText(description, ctx.font, TABLE_TEXT_SIZE, TABLE_COLS[2] - TABLE_COLS[1] - 10);
-    ctx.writeCentered(descLines[0] ?? '', (TABLE_COLS[1] + TABLE_COLS[2]) / 2, y - 15, TABLE_TEXT_SIZE);
-    ctx.writeCentered(qtyText, (TABLE_COLS[2] + TABLE_COLS[3]) / 2, y - 15, TABLE_TEXT_SIZE);
-    ctx.writeCentered(`${rate.toLocaleString('en-IN')}/-`, (TABLE_COLS[3] + TABLE_COLS[4]) / 2, y - 15, TABLE_TEXT_SIZE);
-    ctx.writeRightAligned(formatAmount(amount), TABLE_COLS[5] - 5, y - 15, TABLE_TEXT_SIZE);
+    const rowHeight = Math.max(TABLE_ROW_HEIGHT, descLines.length * (TABLE_TEXT_SIZE + 3) + 10);
+    const textY = y - 15;
+    ctx.writeCentered(slNo, (TABLE_COLS[0] + TABLE_COLS[1]) / 2, textY, TABLE_TEXT_SIZE);
+    descLines.forEach((line, i) => {
+      ctx.writeCentered(line, (TABLE_COLS[1] + TABLE_COLS[2]) / 2, textY - i * (TABLE_TEXT_SIZE + 3), TABLE_TEXT_SIZE);
+    });
+    ctx.writeCentered(qtyText, (TABLE_COLS[2] + TABLE_COLS[3]) / 2, textY, TABLE_TEXT_SIZE);
+    ctx.writeCentered(`${rate.toLocaleString('en-IN')}/-`, (TABLE_COLS[3] + TABLE_COLS[4]) / 2, textY, TABLE_TEXT_SIZE);
+    ctx.writeRightAligned(formatAmount(amount), TABLE_COLS[5] - 5, textY, TABLE_TEXT_SIZE);
+    return rowHeight;
   };
 
   const drawSummaryRow = (label: string, amount: number, y: number, bold = false) => {
@@ -125,8 +130,8 @@ export async function renderInfQuotationPdf(quotation: Quotation): Promise<Uint8
     ctx.cursorY -= TABLE_ROW_HEIGHT;
     ctx.drawHorizontalLine(TABLE_LEFT, TABLE_RIGHT, ctx.cursorY);
 
-    const ensureSpaceInsideTable = async () => {
-      if (ctx.cursorY - TABLE_ROW_HEIGHT < TABLE_BOTTOM_LIMIT) {
+    const ensureSpaceInsideTable = async (neededHeight: number = TABLE_ROW_HEIGHT) => {
+      if (ctx.cursorY - neededHeight < TABLE_BOTTOM_LIMIT) {
         for (const x of TABLE_COLS) ctx.drawVerticalLine(x, tableTopY, ctx.cursorY);
         await ctx.newPage();
         tableTopY = ctx.cursorY;
@@ -138,11 +143,13 @@ export async function renderInfQuotationPdf(quotation: Quotation): Promise<Uint8
     };
 
     for (let i = 0; i < taxableItems.length; i++) {
-      await ensureSpaceInsideTable();
       const item = taxableItems[i];
       const qtyText = item.unit.trim() ? `${item.quantity} ${item.unit.trim()}` : String(item.quantity);
-      drawItemRow(String(i + 1).padStart(2, '0'), item.description, qtyText, item.rate, item.total, ctx.cursorY);
-      ctx.cursorY -= TABLE_ROW_HEIGHT;
+      const descLines = wrapText(item.description, ctx.font, TABLE_TEXT_SIZE, TABLE_COLS[2] - TABLE_COLS[1] - 10);
+      const rowHeight = Math.max(TABLE_ROW_HEIGHT, descLines.length * (TABLE_TEXT_SIZE + 3) + 10);
+      await ensureSpaceInsideTable(rowHeight);
+      const usedHeight = drawItemRow(String(i + 1).padStart(2, '0'), item.description, qtyText, item.rate, item.total, ctx.cursorY);
+      ctx.cursorY -= usedHeight;
       ctx.drawHorizontalLine(TABLE_LEFT, TABLE_RIGHT, ctx.cursorY);
     }
 
@@ -156,16 +163,19 @@ export async function renderInfQuotationPdf(quotation: Quotation): Promise<Uint8
     ctx.cursorY -= TABLE_ROW_HEIGHT;
     ctx.drawHorizontalLine(TABLE_LEFT, TABLE_RIGHT, ctx.cursorY);
 
-    await ensureSpaceInsideTable();
-    drawSummaryRow('Total', quotation.totalBeforeDeduction, ctx.cursorY, true);
-    ctx.cursorY -= TABLE_ROW_HEIGHT;
-    ctx.drawHorizontalLine(TABLE_LEFT, TABLE_RIGHT, ctx.cursorY);
-
-    for (const deduction of deductionItems) {
+    const hasDeduction = deductionItems.length > 0;
+    if (hasDeduction) {
       await ensureSpaceInsideTable();
-      drawSummaryRow(`Less: ${deduction.description}`, deduction.total, ctx.cursorY, true);
+      drawSummaryRow('Total', quotation.totalBeforeDeduction, ctx.cursorY, true);
       ctx.cursorY -= TABLE_ROW_HEIGHT;
       ctx.drawHorizontalLine(TABLE_LEFT, TABLE_RIGHT, ctx.cursorY);
+
+      for (const deduction of deductionItems) {
+        await ensureSpaceInsideTable();
+        drawSummaryRow(`Less: ${deduction.description}`, deduction.total, ctx.cursorY, true);
+        ctx.cursorY -= TABLE_ROW_HEIGHT;
+        ctx.drawHorizontalLine(TABLE_LEFT, TABLE_RIGHT, ctx.cursorY);
+      }
     }
 
     await ensureSpaceInsideTable();

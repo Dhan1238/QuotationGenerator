@@ -17,9 +17,9 @@ import type { PDFImage } from 'pdf-lib';
 import type { LineItem, Quotation } from './types';
 import { PdfContext, fetchAssetBytes, formatAmount, formatDate, formatNumber, hexToRgb, wrapText, type Rect } from './pdfKit';
 
-export const SPE_TEMPLATE_PATH = `${import.meta.env.BASE_URL}spe_kbl.pdf`;
-const SIGNATURE_IMAGE_PATH = `${import.meta.env.BASE_URL}signature.png`;
-const STAMP_IMAGE_PATH = `${import.meta.env.BASE_URL}stamp.png`;
+export const SPE_TEMPLATE_PATH = '/spe_kbl.pdf';
+const SIGNATURE_IMAGE_PATH = '/signature.png';
+const STAMP_IMAGE_PATH = '/stamp.png';
 
 const COMPANY_GSTIN = '29CPBPS6491F1ZE';
 export const SPE_DEFAULT_TERMS = ['Taxes: Included', 'Time required: 1 Week after confirmation'];
@@ -174,16 +174,19 @@ export async function renderSpeQuotationPdf(quotation: Quotation): Promise<Uint8
     ctx.cursorY -= TABLE_ROW_HEIGHT;
     ctx.drawHorizontalLine(TABLE_LEFT, TABLE_RIGHT, ctx.cursorY);
 
-    await ensureSpaceInsideTable();
-    drawSummaryRow('Total', quotation.totalBeforeDeduction, ctx.cursorY, true);
-    ctx.cursorY -= TABLE_ROW_HEIGHT;
-    ctx.drawHorizontalLine(TABLE_LEFT, TABLE_RIGHT, ctx.cursorY);
-
-    for (const deduction of deductionItems) {
+    const hasDeduction = deductionItems.length > 0;
+    if (hasDeduction) {
       await ensureSpaceInsideTable();
-      drawSummaryRow(`Less: ${deduction.description}`, deduction.total, ctx.cursorY, true);
+      drawSummaryRow('Total', quotation.totalBeforeDeduction, ctx.cursorY, true);
       ctx.cursorY -= TABLE_ROW_HEIGHT;
       ctx.drawHorizontalLine(TABLE_LEFT, TABLE_RIGHT, ctx.cursorY);
+
+      for (const deduction of deductionItems) {
+        await ensureSpaceInsideTable();
+        drawSummaryRow(`Less: ${deduction.description}`, deduction.total, ctx.cursorY, true);
+        ctx.cursorY -= TABLE_ROW_HEIGHT;
+        ctx.drawHorizontalLine(TABLE_LEFT, TABLE_RIGHT, ctx.cursorY);
+      }
     }
 
     await ensureSpaceInsideTable();

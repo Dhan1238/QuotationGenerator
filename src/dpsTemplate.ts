@@ -18,8 +18,8 @@ import type { PDFImage } from 'pdf-lib';
 import type { Quotation } from './types';
 import { PdfContext, fetchAssetBytes, formatAmount, formatDate, wrapText } from './pdfKit';
 
-export const DPS_TEMPLATE_PATH = `${import.meta.env.BASE_URL}dps.pdf`;
-const SIGNATURE_IMAGE_PATH = `${import.meta.env.BASE_URL}dps-signature.png`;
+export const DPS_TEMPLATE_PATH = '/dps.pdf';
+const SIGNATURE_IMAGE_PATH = '/dps-signature.png';
 
 const COMPANY_GSTIN = '29AAHFD9804G1Z8';
 const INTRO_PARAGRAPH = 'With reference to the above subject matter, now we are quoted the price as per below:';
@@ -57,12 +57,17 @@ export async function renderDpsQuotationPdf(quotation: Quotation): Promise<Uint8
   const ctx = await PdfContext.create(templateBytes, TOP_CONTENT_Y, RULE_BOTTOM_Y);
   const signatureImage = await ctx.embedPng(signatureBytes, 'The signature image');
 
-  const drawItemRow = (description: string, qtyText: string, rateText: string, amountText: string, y: number) => {
+  const drawItemRow = (description: string, qtyText: string, rateText: string, amountText: string, y: number): number => {
     const descLines = wrapText(description, ctx.font, TABLE_TEXT_SIZE, TABLE_COLS[1] - TABLE_COLS[0] - 16);
-    ctx.write(descLines[0] ?? '', TABLE_COLS[0] + 8, y - 14, TABLE_TEXT_SIZE);
-    ctx.writeCentered(qtyText, (TABLE_COLS[1] + TABLE_COLS[2]) / 2, y - 14, TABLE_TEXT_SIZE);
-    ctx.writeCentered(rateText, (TABLE_COLS[2] + TABLE_COLS[3]) / 2, y - 14, TABLE_TEXT_SIZE);
-    ctx.writeRightAligned(amountText, TABLE_COLS[4] - 5, y - 14, TABLE_TEXT_SIZE);
+    const rowHeight = Math.max(TABLE_ROW_HEIGHT, descLines.length * (TABLE_TEXT_SIZE + 3) + 8);
+    const textY = y - 14;
+    descLines.forEach((line, i) => {
+      ctx.write(line, TABLE_COLS[0] + 8, textY - i * (TABLE_TEXT_SIZE + 3), TABLE_TEXT_SIZE);
+    });
+    ctx.writeCentered(qtyText, (TABLE_COLS[1] + TABLE_COLS[2]) / 2, textY, TABLE_TEXT_SIZE);
+    ctx.writeCentered(rateText, (TABLE_COLS[2] + TABLE_COLS[3]) / 2, textY, TABLE_TEXT_SIZE);
+    ctx.writeRightAligned(amountText, TABLE_COLS[4] - 5, textY, TABLE_TEXT_SIZE);
+    return rowHeight;
   };
 
   const drawSummaryRow = (label: string, amount: number, y: number, bold = false) => {
@@ -107,8 +112,8 @@ export async function renderDpsQuotationPdf(quotation: Quotation): Promise<Uint8
     let tableTopY = ctx.cursorY;
     ctx.drawHorizontalLine(TABLE_LEFT, TABLE_RIGHT, ctx.cursorY);
 
-    const ensureSpaceInsideTable = async () => {
-      if (ctx.cursorY - TABLE_ROW_HEIGHT < TABLE_BOTTOM_LIMIT) {
+    const ensureSpaceInsideTable = async (neededHeight: number = TABLE_ROW_HEIGHT) => {
+      if (ctx.cursorY - neededHeight < TABLE_BOTTOM_LIMIT) {
         for (const x of TABLE_COLS) ctx.drawVerticalLine(x, tableTopY, ctx.cursorY);
         await ctx.newPage();
         tableTopY = ctx.cursorY;
@@ -117,12 +122,14 @@ export async function renderDpsQuotationPdf(quotation: Quotation): Promise<Uint8
     };
 
     for (let i = 0; i < taxableItems.length; i++) {
-      await ensureSpaceInsideTable();
       const item = taxableItems[i];
       const qtyText = item.unit.trim() ? `${item.quantity} ${item.unit.trim()}` : String(item.quantity);
       const label = `${i + 1}.  ${item.description}`;
-      drawItemRow(label, qtyText, formatAmount(item.rate), formatAmount(item.total), ctx.cursorY);
-      ctx.cursorY -= TABLE_ROW_HEIGHT;
+      const descLines = wrapText(label, ctx.font, TABLE_TEXT_SIZE, TABLE_COLS[1] - TABLE_COLS[0] - 16);
+      const rowHeight = Math.max(TABLE_ROW_HEIGHT, descLines.length * (TABLE_TEXT_SIZE + 3) + 8);
+      await ensureSpaceInsideTable(rowHeight);
+      const usedHeight = drawItemRow(label, qtyText, formatAmount(item.rate), formatAmount(item.total), ctx.cursorY);
+      ctx.cursorY -= usedHeight;
       ctx.drawHorizontalLine(TABLE_LEFT, TABLE_RIGHT, ctx.cursorY);
     }
 
@@ -136,16 +143,19 @@ export async function renderDpsQuotationPdf(quotation: Quotation): Promise<Uint8
     ctx.cursorY -= TABLE_ROW_HEIGHT;
     ctx.drawHorizontalLine(TABLE_LEFT, TABLE_RIGHT, ctx.cursorY);
 
-    await ensureSpaceInsideTable();
-    drawSummaryRow('Total', quotation.totalBeforeDeduction, ctx.cursorY, true);
-    ctx.cursorY -= TABLE_ROW_HEIGHT;
-    ctx.drawHorizontalLine(TABLE_LEFT, TABLE_RIGHT, ctx.cursorY);
-
-    for (const deduction of deductionItems) {
+    const hasDeduction = deductionItems.length > 0;
+    if (hasDeduction) {
       await ensureSpaceInsideTable();
-      drawSummaryRow(`Less: ${deduction.description}`, deduction.total, ctx.cursorY, true);
+      drawSummaryRow('Total', quotation.totalBeforeDeduction, ctx.cursorY, true);
       ctx.cursorY -= TABLE_ROW_HEIGHT;
       ctx.drawHorizontalLine(TABLE_LEFT, TABLE_RIGHT, ctx.cursorY);
+
+      for (const deduction of deductionItems) {
+        await ensureSpaceInsideTable();
+        drawSummaryRow(`Less: ${deduction.description}`, deduction.total, ctx.cursorY, true);
+        ctx.cursorY -= TABLE_ROW_HEIGHT;
+        ctx.drawHorizontalLine(TABLE_LEFT, TABLE_RIGHT, ctx.cursorY);
+      }
     }
 
     await ensureSpaceInsideTable();
