@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+/* Activates toggle-based manual themes for Tailwind v4 */
+@variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    @apply transition-colors duration-200 antialiased font-sans;
+  }
+  
+  /* Clears default macOS webkit styling conflicts on input fields */
+  input, select, textarea {
+    @apply appearance-none outline-none;
+  }
+}
