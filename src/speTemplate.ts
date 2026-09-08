@@ -37,7 +37,7 @@ const CONTENT_LEFT = 36;
 const CONTENT_RIGHT = 535;
 const PAGE_CENTER_X = 306;
 const TOP_CONTENT_Y = 692;
-const RULE_BOTTOM_Y = 90;
+const RULE_BOTTOM_Y = 70;
 
 const BODY_SIZE = 11;
 const LINE_GAP = 13;
@@ -208,44 +208,43 @@ export async function renderSpeQuotationPdf(quotation: Quotation): Promise<Uint8
     // matching comment in amcTemplate.ts for why this is measured, not
     // guessed, and why terms/closing need their own line counts now that
     // terms are user-editable and can no longer be assumed to be 2 lines.
-    const closingSectionHeight =
-      PARA_GAP + // GSTIN -> Terms header
-      LINE_GAP + // Terms header -> first term line
-      termsLineCount * LINE_GAP +
-      (PARA_GAP - LINE_GAP) + // terms -> closing paragraph
-      closingParaLineCount * LINE_GAP +
-      (PARA_GAP - LINE_GAP) + // closing paragraph -> "Thank you."
-      LINE_GAP * 2 + // "Thank you." / "Yours truly"
-      Math.max(SIGNATURE_DISPLAY_HEIGHT, STAMP_DISPLAY_HEIGHT) +
-      LINE_GAP + // image bottom -> "Authorized signatory"
-      10;
+const closingSectionHeight =
+  LINE_GAP + // GSTIN -> Terms header (reduced from PARA_GAP)
+  LINE_GAP + // Terms header -> first term line
+  termsLineCount * LINE_GAP +
+  10 + // terms -> closing paragraph (reduced from PARA_GAP - LINE_GAP)
+  closingParaLineCount * LINE_GAP +
+  10 + // closing paragraph -> "Thank you." (reduced)
+  LINE_GAP * 2 + // "Thank you." / "Yours truly"
+  Math.max(SIGNATURE_DISPLAY_HEIGHT, STAMP_DISPLAY_HEIGHT) +
+  5; // image bottom -> "Authorized signatory" (reduced)
     await ctx.ensureSpace(closingSectionHeight);
 
-    ctx.write(`OUR GSTIN: ${COMPANY_GSTIN}`, CONTENT_LEFT, ctx.cursorY, BODY_SIZE);
-    ctx.cursorY -= PARA_GAP;
+ctx.write(`OUR GSTIN: ${COMPANY_GSTIN}`, CONTENT_LEFT, ctx.cursorY, BODY_SIZE);
+ctx.cursorY -= LINE_GAP; // Changed from PARA_GAP
 
-    ctx.write('Terms & Conditions:', CONTENT_LEFT, ctx.cursorY, BODY_SIZE, true);
-    ctx.cursorY -= LINE_GAP;
-    for (const term of terms) {
-      ctx.cursorY = ctx.writeParagraph(term, CONTENT_LEFT, ctx.cursorY, CONTENT_RIGHT - CONTENT_LEFT, BODY_SIZE, 0, false, termsColor);
-    }
-    ctx.cursorY -= PARA_GAP - LINE_GAP;
+ctx.write('Terms & Conditions:', CONTENT_LEFT, ctx.cursorY, BODY_SIZE, true);
+ctx.cursorY -= LINE_GAP;
+for (const term of terms) {
+  ctx.cursorY = ctx.writeParagraph(term, CONTENT_LEFT, ctx.cursorY, CONTENT_RIGHT - CONTENT_LEFT, BODY_SIZE, 0, false, termsColor);
+}
+ctx.cursorY -= 10; // Changed from PARA_GAP - LINE_GAP
 
-    ctx.cursorY = ctx.writeParagraph(CLOSING_PARAGRAPH, CONTENT_LEFT, ctx.cursorY, CONTENT_RIGHT - CONTENT_LEFT, BODY_SIZE);
-    ctx.cursorY -= PARA_GAP - LINE_GAP;
+ctx.cursorY = ctx.writeParagraph(CLOSING_PARAGRAPH, CONTENT_LEFT, ctx.cursorY, CONTENT_RIGHT - CONTENT_LEFT, BODY_SIZE);
+ctx.cursorY -= 10; // Changed from PARA_GAP - LINE_GAP
 
-    ctx.write('Thank you.', CONTENT_LEFT, ctx.cursorY, BODY_SIZE);
-    ctx.cursorY -= LINE_GAP;
-    ctx.write('Yours truly', CONTENT_LEFT, ctx.cursorY, BODY_SIZE);
-    ctx.cursorY -= LINE_GAP;
+ctx.write('Thank you.', CONTENT_LEFT, ctx.cursorY, BODY_SIZE);
+ctx.cursorY -= LINE_GAP;
+ctx.write('Yours truly', CONTENT_LEFT, ctx.cursorY, BODY_SIZE);
+ctx.cursorY -= LINE_GAP;
 
-    const signOffTopY = ctx.cursorY;
-    const imageBottomY = signOffTopY - Math.max(SIGNATURE_DISPLAY_HEIGHT, STAMP_DISPLAY_HEIGHT);
-    ctx.drawImage(signatureImage as PDFImage, CONTENT_LEFT, imageBottomY, SIGNATURE_DISPLAY_WIDTH, SIGNATURE_DISPLAY_HEIGHT);
-    ctx.drawImage(stampImage as PDFImage, CONTENT_RIGHT - STAMP_DISPLAY_WIDTH, imageBottomY, STAMP_DISPLAY_WIDTH, STAMP_DISPLAY_HEIGHT);
-    ctx.cursorY = imageBottomY - LINE_GAP;
+const signOffTopY = ctx.cursorY;
+const imageBottomY = signOffTopY - Math.max(SIGNATURE_DISPLAY_HEIGHT, STAMP_DISPLAY_HEIGHT);
+ctx.drawImage(signatureImage as PDFImage, CONTENT_LEFT, imageBottomY, SIGNATURE_DISPLAY_WIDTH, SIGNATURE_DISPLAY_HEIGHT);
+ctx.drawImage(stampImage as PDFImage, CONTENT_RIGHT - STAMP_DISPLAY_WIDTH, imageBottomY, STAMP_DISPLAY_WIDTH, STAMP_DISPLAY_HEIGHT);
+ctx.cursorY = imageBottomY - 5; // Changed from LINE_GAP
 
-    ctx.write('Authorized signatory', CONTENT_LEFT, ctx.cursorY, BODY_SIZE);
+ctx.write('Authorized signatory', CONTENT_LEFT, ctx.cursorY, BODY_SIZE);
   } catch (error) {
     if (error instanceof Error) throw error;
     throw new Error('Something went wrong while laying out the PDF content.', { cause: error });
