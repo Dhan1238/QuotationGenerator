@@ -17,6 +17,7 @@
 import type { PDFImage } from 'pdf-lib';
 import type { Quotation } from './types';
 import { PdfContext, fetchAssetBytes, formatAmount, formatDate, wrapText } from './pdfKit';
+import { isDeductionItem } from './calculations';
 
 export const DPS_TEMPLATE_PATH = `${import.meta.env.BASE_URL}dps.pdf`;
 const SIGNATURE_IMAGE_PATH = `${import.meta.env.BASE_URL}dps-signature.png`;
@@ -105,8 +106,8 @@ export async function renderDpsQuotationPdf(quotation: Quotation): Promise<Uint8
     ctx.cursorY = ctx.writeParagraph(INTRO_PARAGRAPH, CONTENT_LEFT, ctx.cursorY, CONTENT_RIGHT - CONTENT_LEFT, BODY_SIZE, 44);
     ctx.cursorY -= 4;
 
-    const taxableItems = quotation.lineItems.filter((item) => item.total >= 0);
-    const deductionItems = quotation.lineItems.filter((item) => item.total < 0);
+    const taxableItems = quotation.lineItems.filter((item) => !isDeductionItem(item));
+    const deductionItems = quotation.lineItems.filter((item) => isDeductionItem(item));
 
     await ctx.ensureSpace(TABLE_ROW_HEIGHT * 2);
     let tableTopY = ctx.cursorY;

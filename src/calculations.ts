@@ -31,15 +31,26 @@ export function computeLineTotal(rate: number, quantity: number): number {
   return round2(rate * quantity);
 }
 
-/** Sum of taxable line items only (total >= 0) — deductions are excluded. */
+/** Determines whether a line item is a deduction row.
+ * A line item is a deduction if it is explicitly flagged (isDeduction: true)
+ * or has a negative rate/total for backward compatibility. */
+export function isDeductionItem(item: LineItem): boolean {
+  return Boolean(item.isDeduction) || item.rate < 0 || item.total < 0;
+}
+
+/** Sum of taxable line items only — deductions are excluded. */
 export function computeSubtotal(items: LineItem[]): number {
-  const sum = items.filter((item) => item.total >= 0).reduce((acc, item) => acc + item.total, 0);
+  const sum = items
+    .filter((item) => !isDeductionItem(item))
+    .reduce((acc, item) => acc + item.total, 0);
   return round2(sum);
 }
 
-/** Sum of deduction line items only (total < 0). Returns zero or a negative number. */
+/** Sum of deduction line items only. Returns zero or a negative number. */
 export function computeDeductionTotal(items: LineItem[]): number {
-  const sum = items.filter((item) => item.total < 0).reduce((acc, item) => acc + item.total, 0);
+  const sum = items
+    .filter((item) => isDeductionItem(item))
+    .reduce((acc, item) => acc - Math.abs(item.total), 0);
   return round2(sum);
 }
 

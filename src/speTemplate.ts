@@ -16,6 +16,7 @@
 import type { PDFImage } from 'pdf-lib';
 import type { LineItem, Quotation } from './types';
 import { PdfContext, fetchAssetBytes, formatAmount, formatDate, formatNumber, hexToRgb, wrapText, type Rect } from './pdfKit';
+import { isDeductionItem } from './calculations';
 
 export const SPE_TEMPLATE_PATH = `${import.meta.env.BASE_URL}spe_kbl.pdf`;
 const SIGNATURE_IMAGE_PATH = `${import.meta.env.BASE_URL}signature.png`;
@@ -132,8 +133,8 @@ export async function renderSpeQuotationPdf(quotation: Quotation): Promise<Uint8
 
     ctx.cursorY = ctx.writeParagraph(INTRO_PARAGRAPH, CONTENT_LEFT, ctx.cursorY, CONTENT_RIGHT - CONTENT_LEFT, BODY_SIZE, 48);
 
-    const taxableItems = quotation.lineItems.filter((item) => item.total >= 0);
-    const deductionItems = quotation.lineItems.filter((item) => item.total < 0);
+    const taxableItems = quotation.lineItems.filter((item) => !isDeductionItem(item));
+    const deductionItems = quotation.lineItems.filter((item) => isDeductionItem(item));
 
     await ctx.ensureSpace(TABLE_ROW_HEIGHT * 2);
     let tableTopY = ctx.cursorY;

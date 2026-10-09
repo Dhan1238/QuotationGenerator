@@ -22,6 +22,7 @@
 import type { PDFImage } from 'pdf-lib';
 import type { Quotation } from './types';
 import { PdfContext, fetchAssetBytes, formatAmount, formatDate, hexToRgb, wrapText } from './pdfKit';
+import { isDeductionItem } from './calculations';
 
 export const SPE_AMC_TEMPLATE_PATH = `${import.meta.env.BASE_URL}spe_amc.pdf`;
 export const SESHADRIPURAM_TEMPLATE_PATH = `${import.meta.env.BASE_URL}seshadripuram.pdf`;
@@ -148,8 +149,8 @@ async function renderAmcLetter(quotation: Quotation, variant: AmcVariant): Promi
 
     // --- AMC table: each taxable item as its own bold row, then GST, then
     // Total (and Grand Total / deduction rows only if a deduction exists) ---
-    const taxableItems = quotation.lineItems.filter((item) => item.total >= 0);
-    const deductionItems = quotation.lineItems.filter((item) => item.total < 0);
+    const taxableItems = quotation.lineItems.filter((item) => !isDeductionItem(item));
+    const deductionItems = quotation.lineItems.filter((item) => isDeductionItem(item));
 
     let tableTopY = ctx.cursorY;
     ctx.drawHorizontalLine(TABLE_LEFT, TABLE_RIGHT, ctx.cursorY);

@@ -19,6 +19,7 @@ import {
   computeTax,
   computeTotalBeforeDeduction,
   formatCurrencyDisplay,
+  isDeductionItem,
 } from './calculations';
 import {
   fetchTemplates,
@@ -37,8 +38,8 @@ import QuotationHistory from './QuotationHistory';
 const GST_RATE = 0.18;
 const THEME_STORAGE_KEY = 'quotation-app-theme';
 
-function createEmptyLineItem(): LineItem {
-  return { id: crypto.randomUUID(), description: '', rate: 0, quantity: 1, unit: '', total: 0 };
+function createEmptyLineItem(isDeduction = false): LineItem {
+  return { id: crypto.randomUUID(), description: '', rate: 0, quantity: 1, unit: '', total: 0, isDeduction };
 }
 
 function readInitialTheme(): ThemeMode {
@@ -247,7 +248,7 @@ export default function QuotationForm() {
   // ---------------------------------------------------------------------
   const updateLineItem = (
     id: string,
-    patch: Partial<Pick<LineItem, 'description' | 'rate' | 'quantity' | 'unit'>>,
+    patch: Partial<Pick<LineItem, 'description' | 'rate' | 'quantity' | 'unit' | 'isDeduction'>>,
   ) => {
     setLineItems((prev) =>
       prev.map((item) => {
@@ -259,10 +260,10 @@ export default function QuotationForm() {
     );
   };
 
-  const addLineItem = () => setLineItems((prev) => [...prev, createEmptyLineItem()]);
+  const addLineItem = () => setLineItems((prev) => [...prev, createEmptyLineItem(false)]);
 
   const addDeductionItem = () => {
-    const newItem = createEmptyLineItem();
+    const newItem = createEmptyLineItem(true);
     setLineItems((prev) => [...prev, newItem]);
     setDeductionRowIds((prev) => new Set(prev).add(newItem.id));
   };
@@ -293,15 +294,20 @@ export default function QuotationForm() {
 
   const rateDisplayValue = (item: LineItem): string => {
     if (item.id in rateDrafts) return rateDrafts[item.id];
-    return item.rate === 0 ? '' : item.rate.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+    const isDeduction = isDeductionItem(item) || deductionRowIds.has(item.id);
+    const val = isDeduction ? Math.abs(item.rate) : item.rate;
+    return val === 0 ? '' : val.toLocaleString('en-IN', { maximumFractionDigits: 2 });
   };
 
   const handleRateFocus = (item: LineItem) => {
-    setRateDrafts((prev) => ({ ...prev, [item.id]: item.rate === 0 ? '' : String(item.rate) }));
+    const isDeduction = isDeductionItem(item) || deductionRowIds.has(item.id);
+    const val = isDeduction ? Math.abs(item.rate) : item.rate;
+    setRateDrafts((prev) => ({ ...prev, [item.id]: val === 0 ? '' : String(val) }));
   };
 
   const handleRateChange = (item: LineItem, rawInput: string) => {
-    const isNegative = rawInput.trim().startsWith('-');
+    const isDeduction = isDeductionItem(item) || deductionRowIds.has(item.id);
+    const isNegative = !isDeduction && rawInput.trim().startsWith('-');
     let digits = rawInput.replace(/-/g, '').replace(/[^0-9.]/g, '');
     const firstDot = digits.indexOf('.');
     if (firstDot !== -1) {
@@ -310,7 +316,8 @@ export default function QuotationForm() {
     const cleaned = (isNegative ? '-' : '') + digits;
     setRateDrafts((prev) => ({ ...prev, [item.id]: cleaned }));
     const parsed = cleaned === '' || cleaned === '-' ? 0 : Number(cleaned);
-    updateLineItem(item.id, { rate: Number.isNaN(parsed) ? 0 : parsed });
+    const finalRate = Number.isNaN(parsed) ? 0 : (isDeduction ? Math.abs(parsed) : parsed);
+    updateLineItem(item.id, { rate: finalRate });
   };
 
   const handleRateBlur = (item: LineItem) => {
@@ -325,11 +332,14 @@ export default function QuotationForm() {
   // ---------------------------------------------------------------------
   // Live totals
   // ---------------------------------------------------------------------
-  // A line item with a negative total (e.g. an old-item buyback) is a
+  // A line item added via "Add Deduction Row" or with a negative total is a
   // deduction, not a taxable sale — it comes off AFTER GST, not before.
   // See calculations.ts for why folding it into the subtotal would
   // undercharge tax.
-  const deductionItems = useMemo(() => lineItems.filter((item) => item.total < 0), [lineItems]);
+  const deductionItems = useMemo(
+    () => lineItems.filter((item) => isDeductionItem(item) || deductionRowIds.has(item.id)),
+    [lineItems, deductionRowIds],
+  );
   const subtotal = useMemo(() => computeSubtotal(lineItems), [lineItems]);
   const taxAmount = useMemo(() => computeTax(subtotal, GST_RATE), [subtotal]);
   const totalBeforeDeduction = useMemo(
@@ -352,8 +362,11 @@ export default function QuotationForm() {
     if (!subject.trim()) return 'Enter the subject of the quotation.';
     if (!clientName.trim()) return "Enter the client's name.";
     if (!selectedTemplateId) return 'Choose a letterhead template.';
-    const hasValidItem = lineItems.some((item) => item.description.trim() && item.quantity > 0);
-    if (!hasValidItem) return 'Add at least one line item with a description and a quantity above zero.';
+    const hasValidItem = lineItems.some(
+      (item) => !isDeductionItem(item) && item.description.trim() && item.quantity > 0,
+    );
+    if (!hasValidItem) return 'Add at least one taxable line item with a description and a quantity above zero.';
+    if (grandTotal < 0) return 'Total deductions cannot exceed the total bill amount.';
     return null;
   };
 
@@ -388,7 +401,12 @@ export default function QuotationForm() {
         usedFiscalYear = fiscalYear;
         quoteNumber = `${selectedTemplate.fixedPrefix}/${fiscalYear}/${selectedTemplate.fixedSuffix}`;
       }
-      const cleanedLineItems = lineItems.filter((item) => item.description.trim());
+      const cleanedLineItems = lineItems
+        .filter((item) => item.description.trim())
+        .map((item) => ({
+          ...item,
+          isDeduction: Boolean(isDeductionItem(item) || deductionRowIds.has(item.id)),
+        }));
       const hasTermsSection = Boolean(selectedTemplate.defaultTerms);
       const cleanedTerms = termsText
         .split('\n')
@@ -466,8 +484,15 @@ export default function QuotationForm() {
     setClientAddress(quotation.clientAddress);
     setClientGstin(quotation.clientGstin);
     setDate(quotation.date);
-    setLineItems(quotation.lineItems.length > 0 ? quotation.lineItems : [createEmptyLineItem()]);
-    setDeductionRowIds(new Set(quotation.lineItems.filter((item) => item.total < 0).map((item) => item.id)));
+    setLineItems(
+      quotation.lineItems.length > 0
+        ? quotation.lineItems.map((item) => ({
+            ...item,
+            isDeduction: isDeductionItem(item),
+          }))
+        : [createEmptyLineItem()],
+    );
+    setDeductionRowIds(new Set(quotation.lineItems.filter(isDeductionItem).map((item) => item.id)));
     setRateDrafts({});
     const nextTemplate = templates.find((template) => template.id === quotation.templateId);
     if (nextTemplate) {
@@ -738,22 +763,35 @@ export default function QuotationForm() {
         <fieldset className="mb-6 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-4 sm:p-6">
           <legend className="px-1 text-base font-semibold">Line Items</legend>
           <p className="mb-4 text-sm text-neutral-500 dark:text-neutral-400">
-            Need to deduct something, like an old-item buyback? Add a row for it with a negative rate — it's
-            optional and only shows up on the quotation when you use it.
+            Need to deduct something, like an old-item buyback? Click &quot;Add Deduction Row&quot; &mdash; deductions
+            are subtracted from the total after GST.
           </p>
 
           <div className="space-y-4">
             {lineItems.map((item, index) => {
-              const isDeductionRow = deductionRowIds.has(item.id);
+              const isDeductionRow = isDeductionItem(item) || deductionRowIds.has(item.id);
               return (
               <div
                 key={item.id}
-                className="grid grid-cols-2 gap-3 rounded-lg border border-neutral-200 dark:border-neutral-700 p-3
-                           md:grid-cols-12 md:items-start md:border-0 md:p-0"
+                className={`grid grid-cols-2 gap-3 rounded-lg border p-3
+                           md:grid-cols-12 md:items-start md:border-0 md:p-0 ${
+                             isDeductionRow
+                               ? 'border-amber-300 dark:border-amber-700/60 bg-amber-50/40 dark:bg-amber-950/20 md:rounded-lg md:border md:p-2'
+                               : 'border-neutral-200 dark:border-neutral-700'
+                           }`}
               >
                 <div className="col-span-2 md:col-span-4">
                   <label htmlFor={`description-${item.id}`} className={labelClasses}>
-                    {isDeductionRow ? `Deduction ${index + 1} Description` : `Item ${index + 1} Description`}
+                    {isDeductionRow ? (
+                      <span className="flex items-center gap-1.5">
+                        <span>Deduction Description</span>
+                        <span className="rounded bg-amber-100 dark:bg-amber-900/60 px-1.5 py-0.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                          Deduction
+                        </span>
+                      </span>
+                    ) : (
+                      `Item ${index + 1} Description`
+                    )}
                   </label>
                   <input
                     id={`description-${item.id}`}
@@ -809,15 +847,21 @@ export default function QuotationForm() {
                     onFocus={() => handleRateFocus(item)}
                     onChange={(event) => handleRateChange(item, event.target.value)}
                     onBlur={() => handleRateBlur(item)}
-                    placeholder={isDeductionRow ? 'e.g. -1000' : 'Negative to deduct'}
+                    placeholder={isDeductionRow ? 'e.g. 1000' : 'e.g. 5000'}
                     className={fieldClasses}
                   />
                 </div>
 
                 <div className="md:col-span-2">
                   <span className={labelClasses}>Amount</span>
-                  <div className={`${fieldClasses} bg-neutral-100 dark:bg-neutral-700 font-medium`}>
-                    {formatCurrencyDisplay(item.total)}
+                  <div
+                    className={`${fieldClasses} bg-neutral-100 dark:bg-neutral-700 font-medium ${
+                      isDeductionRow ? 'text-amber-700 dark:text-amber-400' : ''
+                    }`}
+                  >
+                    {isDeductionRow
+                      ? (item.total > 0 ? `- ${formatCurrencyDisplay(item.total)}` : formatCurrencyDisplay(0))
+                      : formatCurrencyDisplay(item.total)}
                   </div>
                 </div>
 
@@ -925,16 +969,18 @@ export default function QuotationForm() {
               <dt className="text-neutral-600 dark:text-neutral-400">GST (18%)</dt>
               <dd className="font-medium">{formatCurrencyDisplay(taxAmount)}</dd>
             </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-neutral-600 dark:text-neutral-400">Total</dt>
-              <dd className="font-medium">{formatCurrencyDisplay(totalBeforeDeduction)}</dd>
-            </div>
+            {deductionItems.length > 0 && (
+              <div className="flex items-center justify-between">
+                <dt className="text-neutral-600 dark:text-neutral-400">Total</dt>
+                <dd className="font-medium">{formatCurrencyDisplay(totalBeforeDeduction)}</dd>
+              </div>
+            )}
             {deductionItems.map((item) => (
-              <div key={item.id} className="flex items-center justify-between">
-                <dt className="text-neutral-600 dark:text-neutral-400">
+              <div key={item.id} className="flex items-center justify-between text-amber-700 dark:text-amber-400">
+                <dt className="truncate pr-2">
                   Less: {item.description || 'Deduction'}
                 </dt>
-                <dd className="font-medium">{formatCurrencyDisplay(Math.abs(item.total))}</dd>
+                <dd className="font-medium shrink-0">{formatCurrencyDisplay(Math.abs(item.total))}</dd>
               </div>
             ))}
             <div className="flex items-center justify-between border-t border-neutral-200 dark:border-neutral-700 pt-2 text-lg">

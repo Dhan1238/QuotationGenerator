@@ -25,6 +25,8 @@ export interface LineItem {
   /** Pre-computed rate * quantity, rounded to 2 decimals. Stored, not derived, so
    * the saved record and the generated PDF always show the exact same number. */
   total: number;
+  /** Whether this row represents a deduction to subtract after GST (e.g. buyback). */
+  isDeduction?: boolean;
 }
 
 /** A fully-assembled quotation, ready to be saved and turned into a PDF. */

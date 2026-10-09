@@ -148,7 +148,7 @@ export async function saveQuotation(quotation: Quotation): Promise<void> {
   } catch (error) {
     throw new QuotationServiceError(
       'The quotation number was reserved, but saving the record failed. ' +
-        `Please note number ${quotation.quoteNumber} and try again.`,
+      `Please note number ${quotation.quoteNumber} and try again.`,
       error,
     );
   }
